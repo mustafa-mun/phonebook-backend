@@ -3,6 +3,7 @@ const app = express();
 const morgan = require("morgan");
 const cors = require("cors");
 
+app.use(express.static("dist"));
 app.use(express.json());
 app.use(cors());
 
@@ -52,11 +53,11 @@ app.get("/api/persons", (_, res) => {
 });
 
 app.get("/api/persons/:id", (req, res) => {
-  const note = persons.find((item) => item.id === Number(req.params.id));
-  if (!note) {
+  const person = persons.find((item) => item.id === Number(req.params.id));
+  if (!person) {
     res.status(404).json({ error: "not found" }).end();
   }
-  res.json(note);
+  res.json(person);
 });
 
 const generateID = () => {
@@ -79,16 +80,42 @@ app.post("/api/persons", (req, res) => {
   };
 
   persons = persons.concat(newPerson);
-  res.status(201).json(newPerson).end();
+  res.status(201).json(newPerson);
+});
+
+app.put("/api/persons/:id", (req, res) => {
+  const person = persons.find((item) => item.id === Number(req.params.id));
+  if (!person) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  const body = req.body;
+
+  if (!body.name) return res.status(400).json({ error: "name is missing" });
+  if (!body.number) return res.status(400).json({ error: "number is missing" });
+
+  const updatedPerson = {
+    id: person.id,
+    name: body.name,
+    number: body.number,
+  };
+
+  persons = persons.map((person) =>
+    person.id === updatedPerson.id ? updatedPerson : person
+  );
+
+  res.json(updatedPerson);
 });
 
 app.delete("/api/persons/:id", (req, res) => {
-  const note = persons.find((item) => item.id === Number(req.params.id));
-  if (!note) {
-    res.status(404).json({ error: "not found" }).end();
+  const person = persons.find((item) => item.id === Number(req.params.id));
+  if (!person) {
+    res.status(404).json({ error: "not found" });
+    return;
   }
 
-  persons = persons.filter((item) => item.id !== note.id);
+  persons = persons.filter((item) => item.id !== person.id);
   res.status(204).end();
 });
 
