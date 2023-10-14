@@ -2,10 +2,30 @@ const express = require("express");
 const app = express();
 const morgan = require("morgan");
 const cors = require("cors");
+const dotenv = require("dotenv");
+const mongoose = require("mongoose");
+
+dotenv.config();
+
+const url = process.env.MONGODB_URI;
+mongoose.set("strictQuery", false);
+mongoose.connect(url).catch((err) => console.log(err));
+
+const Person = require("./models/person");
 
 app.use(express.static("dist"));
 app.use(express.json());
 app.use(cors());
+
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message);
+
+  if (error.name === "CastError") {
+    return response.status(400).send({ error: "malformatted id" });
+  }
+
+  next(error);
+};
 
 morgan.token("content", (req) => {
   return JSON.stringify(req.body);
@@ -16,31 +36,9 @@ app.use(
   )
 );
 
-let persons = [
-  {
-    id: 1,
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
-
-app.get("/info", (req, res) => {
+app.get("/info", async (req, res) => {
   const date = new Date();
+  const persons = await Person.find();
 
   res.send(`
   <p>Phonebook has info for ${persons.length} people</p>
@@ -48,21 +46,26 @@ app.get("/info", (req, res) => {
   `);
 });
 
-app.get("/api/persons", (_, res) => {
-  res.json(persons);
-});
-
-app.get("/api/persons/:id", (req, res) => {
-  const person = persons.find((item) => item.id === Number(req.params.id));
-  if (!person) {
-    res.status(404).json({ error: "not found" }).end();
+app.get("/api/persons", async (_, res) => {
+  try {
+    const persons = await Person.find({});
+    res.json(persons);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  res.json(person);
 });
 
-const generateID = () => {
-  return Math.floor(Math.random() * 1000);
-};
+app.get("/api/persons/:id", async (req, res, next) => {
+  try {
+    const person = await Person.findById(req.params.id);
+    if (!person) {
+      return res.status(404).json({ error: "not found" });
+    }
+    res.json(person);
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post("/api/persons", (req, res) => {
   const body = req.body;
@@ -73,51 +76,59 @@ app.post("/api/persons", (req, res) => {
   const person = persons.find((person) => person.name === body.name);
   if (person) return res.status(400).json({ error: "name must be unique" });
 
-  const newPerson = {
-    id: generateID(),
+  const newPerson = new Person({
     name: body.name,
     number: body.number,
-  };
+  });
 
-  persons = persons.concat(newPerson);
-  res.status(201).json(newPerson);
+  newPerson
+    .save()
+    .then((result) => {
+      res.status(201).json(result);
+    })
+    .catch((err) => {
+      res.status(500).json({ error: err.message });
+    });
 });
 
-app.put("/api/persons/:id", (req, res) => {
-  const person = persons.find((item) => item.id === Number(req.params.id));
-  if (!person) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
+app.put("/api/persons/:id", async (req, res, next) => {
   const body = req.body;
 
   if (!body.name) return res.status(400).json({ error: "name is missing" });
   if (!body.number) return res.status(400).json({ error: "number is missing" });
 
-  const updatedPerson = {
-    id: person.id,
+  const person = {
     name: body.name,
     number: body.number,
   };
 
-  persons = persons.map((person) =>
-    person.id === updatedPerson.id ? updatedPerson : person
-  );
-
-  res.json(updatedPerson);
+  try {
+    const updatedPerson = await Person.findByIdAndUpdate(
+      req.params.id,
+      person,
+      {
+        new: true,
+      }
+    );
+    res.json(updatedPerson);
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.delete("/api/persons/:id", (req, res) => {
-  const person = persons.find((item) => item.id === Number(req.params.id));
-  if (!person) {
-    res.status(404).json({ error: "not found" });
-    return;
+app.delete("/api/persons/:id", async (req, res, next) => {
+  try {
+    const person = await Person.findByIdAndDelete(req.params.id);
+    if (!person) {
+      return res.status(404).json({ error: "not found" });
+    }
+  } catch (error) {
+    next(error);
   }
-
-  persons = persons.filter((item) => item.id !== person.id);
   res.status(204).end();
 });
+
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 
