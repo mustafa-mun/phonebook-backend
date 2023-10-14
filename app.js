@@ -22,6 +22,8 @@ const errorHandler = (error, request, response, next) => {
 
   if (error.name === "CastError") {
     return response.status(400).send({ error: "malformatted id" });
+  } else if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
   }
 
   next(error);
@@ -73,9 +75,6 @@ app.post("/api/persons", (req, res) => {
   if (!body.name) return res.status(400).json({ error: "name is missing" });
   if (!body.number) return res.status(400).json({ error: "number is missing" });
 
-  const person = persons.find((person) => person.name === body.name);
-  if (person) return res.status(400).json({ error: "name must be unique" });
-
   const newPerson = new Person({
     name: body.name,
     number: body.number,
@@ -87,7 +86,7 @@ app.post("/api/persons", (req, res) => {
       res.status(201).json(result);
     })
     .catch((err) => {
-      res.status(500).json({ error: err.message });
+      res.status(400).json({ error: err.message });
     });
 });
 
@@ -106,9 +105,7 @@ app.put("/api/persons/:id", async (req, res, next) => {
     const updatedPerson = await Person.findByIdAndUpdate(
       req.params.id,
       person,
-      {
-        new: true,
-      }
+      { new: true, runValidators: true, context: "query" }
     );
     res.json(updatedPerson);
   } catch (error) {
