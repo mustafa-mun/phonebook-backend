@@ -1,9 +1,10 @@
 const express = require("express");
-const app = express();
 const morgan = require("morgan");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
+
+const app = express();
 
 dotenv.config();
 
@@ -22,16 +23,15 @@ const errorHandler = (error, request, response, next) => {
 
   if (error.name === "CastError") {
     return response.status(400).send({ error: "malformatted id" });
-  } else if (error.name === "ValidationError") {
+  }
+  if (error.name === "ValidationError") {
     return response.status(400).json({ error: error.message });
   }
 
   next(error);
 };
 
-morgan.token("content", (req) => {
-  return JSON.stringify(req.body);
-});
+morgan.token("content", (req) => JSON.stringify(req.body));
 app.use(
   morgan(
     ":method :url :status :res[content-length] - :response-time ms :content"
@@ -70,7 +70,7 @@ app.get("/api/persons/:id", async (req, res, next) => {
 });
 
 app.post("/api/persons", (req, res) => {
-  const body = req.body;
+  const { body } = req.body;
 
   if (!body.name) return res.status(400).json({ error: "name is missing" });
   if (!body.number) return res.status(400).json({ error: "number is missing" });
@@ -91,7 +91,7 @@ app.post("/api/persons", (req, res) => {
 });
 
 app.put("/api/persons/:id", async (req, res, next) => {
-  const body = req.body;
+  const { body } = req.body;
 
   if (!body.name) return res.status(400).json({ error: "name is missing" });
   if (!body.number) return res.status(400).json({ error: "number is missing" });
